@@ -6,20 +6,10 @@
     - TFT_eSPI: 2.3.70 https://github.com/Bodmer/TFT_eSPI
     - ADS1X15: 0.3.3
     - EncoderStepCounter: 1.1.0
-    - Thermistor
     - KeyPad_I2C: 3.0.0
     - EEPROM: Nativa da IDE
     - Wire: Nativa da IDE
     - SPI: Nativa da IDE
-
-
-  13/07
-  mudança da leitura do encoder, sem biblioteca por interrupcao
-  mudança do botao OUT
-  leitura de temperatura sem biblioteca
-
-
-
 
 
 
@@ -142,7 +132,7 @@
 
 */
 
-#define VERSAO 1.3
+#define VERSAO 1.5
 
 // PINAGEM DE CONEXAO
 //------------------------------------------------------------------------
@@ -182,7 +172,7 @@
 #define COLOR3 TFT_MAGENTA // cor canal 3
 #define COLOR4 TFT_WHITE   // cor rodape
 
-#define ITENS_MENU_CONFIG 4 // Quantidade de itens no menu de config
+#define ITENS_MENU_CONFIG 5 // Quantidade de itens no menu de config
 #define ITENS_MENU_CH1_2 6  // Quantidade de itens no menu do canal 1 e 2
 #define ITENS_MENU_CH3 6    // Quantidade de itens no menu do canal 3
 
@@ -248,12 +238,14 @@ byte TEMP_MIN;         // Temperatura para aceleracao do cooler
 byte FAN_PWM;          // Valor PWM para o fan
 byte FAN_PWM_MIN;      // PWM minimo quando estiver fria
 byte OTP;              // Temperatura OTP
+bool Blink;
+int RATE;              // Taxa de atualizacao das leituras
 bool FLAG_OTP;         // FLAG OTP ACIONADO
 bool FLAG_TRIGGER;     // FLAG trigger externo acionado
 char key;              // tecla pressionada no teclado
 signed char pos;       // controle posicao do encoder
 bool FLAG_DIGIT;       // modo de digitacao dos numeros ativo
-
+unsigned long previousMillis = 0;
 unsigned long previousMillis1 = 0;
 byte TIMER;            // tempo de pressionamento do botao do encoder
 byte MENU_ID = 1;      // Posicao do cursor nas telas de menu
@@ -288,6 +280,9 @@ float OCP_CH1, OCP_CH2, OCP_CH3;    // protecao OCP
 float VOUT_CH1, IOUT_CH1, POUT_CH1, VSET_CH1, ISET_CH1; // ajustes e medições CH1
 float VOUT_CH2, IOUT_CH2, POUT_CH2, VSET_CH2, ISET_CH2; // ajustes e medições CH2
 float VOUT_CH3, IOUT_CH3, POUT_CH3, VSET_CH3, ISET_CH3; // ajustes e medições CH3
+
+float VOUT1, VOUT2, VOUT3;
+float IOUT1, IOUT2, IOUT3;
 
 float V_DAC_CH1;   // DAC CH1
 float I_DAC_CH1;   // DAC CH1
@@ -379,6 +374,9 @@ void setup()
 void loop(void)
 {
     METER();
+    PROTECTIONS();
+    RATE_DISPLAY();
+    SWITCH_RELES();
     FAN_CONTROL();
     KEYBOARD_GLOBAL();
 
@@ -599,28 +597,116 @@ void BUZZER(int TEMPO)
   }
 }
 
-void RELES_CH1()
+void SWITCH_RELES()
 {
-  if (VOUT_CH1 > RL1_SWITCH + 0.5)
+  //------------CHAVEADOR DOS RELES----------------------------------------------
+  if (FLAG_OUT_CH1)
+  {
+  if (VOUT1 > RL1_SWITCH + 0.5)
     digitalWrite(RL1_CH1, HIGH);
-  else if (VOUT_CH1 < RL1_SWITCH - 0.5)
+  else if (VOUT1 < RL1_SWITCH - 0.5)
     digitalWrite(RL1_CH1, LOW);
-  if (VOUT_CH1 > RL2_SWITCH + 0.5)
+  if (VOUT1 > RL2_SWITCH + 0.5)
     digitalWrite(RL2_CH1, HIGH);
-  else if (VOUT_CH1 < RL2_SWITCH - 0.5)
+  else if (VOUT1 < RL2_SWITCH - 0.5)
     digitalWrite(RL2_CH1, LOW);
+  }
+  else
+  {
+    digitalWrite(RL1_CH1, LOW);
+    digitalWrite(RL2_CH1, LOW);
+  }
+
+  if (FLAG_OUT_CH2)
+  {
+  if (VOUT2 > RL1_SWITCH + 0.5)
+    digitalWrite(RL1_CH2, HIGH);
+  else if (VOUT2 < RL1_SWITCH - 0.5)
+    digitalWrite(RL1_CH2, LOW);
+  if (VOUT2 > RL2_SWITCH + 0.5)
+    digitalWrite(RL2_CH2, HIGH);
+  else if (VOUT2 < RL2_SWITCH - 0.5)
+    digitalWrite(RL2_CH2, LOW);
+  }
+  else
+  {
+    digitalWrite(RL1_CH2, LOW);
+    digitalWrite(RL2_CH2, LOW);
+  }  
 }
 
-void RELES_CH2()
+void PROTECTIONS()
 {
-  if (VOUT_CH2 > RL1_SWITCH + 0.5)
-    digitalWrite(RL1_CH2, HIGH);
-  else if (VOUT_CH2 < RL1_SWITCH - 0.5)
-    digitalWrite(RL1_CH2, LOW);
-  if (VOUT_CH2 > RL2_SWITCH + 0.5)
-    digitalWrite(RL2_CH2, HIGH);
-  else if (VOUT_CH2 < RL2_SWITCH - 0.5)
-    digitalWrite(RL2_CH2, LOW);
+  //---------CH1---------
+  if (VOUT1 > OVP_CH1)
+  {
+    DAC_Write(DAC_V_CH1, PWR_OFF, 0);
+    FLAG_OUT_CH1 = 0;
+    //SET_OUT();
+    FLAG_OVP_CH1 = 1;
+    BUZZER(1000);
+  }
+  if (IOUT1 > OCP_CH1)
+  {
+    DAC_Write(DAC_V_CH1, PWR_OFF, 0);
+    FLAG_OUT_CH1 = 0;
+    //SET_OUT();
+    FLAG_OCP_CH1 = 1;
+    BUZZER(1000);
+  } 
+  //---------CH2---------
+  if (VOUT2 > OVP_CH2)
+  {
+    DAC_Write(DAC_V_CH2, PWR_OFF, 0);
+    FLAG_OUT_CH2 = 0;
+    //SET_OUT();
+    FLAG_OVP_CH2 = 1;
+    BUZZER(1000);
+  }
+  if (IOUT2 > OCP_CH2)
+  {
+    DAC_Write(DAC_V_CH2, PWR_OFF, 0);
+    FLAG_OUT_CH2 = 0;
+    //SET_OUT();
+    FLAG_OCP_CH2 = 1;
+    BUZZER(1000);
+  }
+  //---------CH3---------  
+  if (VOUT3 > OVP_CH3)
+  {
+    DAC_Write(DAC_V_CH3, PWR_OFF, 0);
+    FLAG_OUT_CH3 = 0;
+    //SET_OUT();
+    FLAG_OVP_CH3 = 1;
+    BUZZER(1000);
+  }
+  if (IOUT3 > OCP_CH3)
+  {
+    DAC_Write(DAC_V_CH3, PWR_OFF, 0);
+    FLAG_OUT_CH3 = 0;
+    //SET_OUT();
+    FLAG_OCP_CH3 = 1;
+    BUZZER(1000);
+  }  
+}
+
+void RATE_DISPLAY()
+{
+    unsigned long currentMillis = millis();
+    if (currentMillis - previousMillis >= RATE)
+    {
+      previousMillis = currentMillis;
+      VOUT_CH1 = VOUT1;
+      IOUT_CH1 = IOUT1;
+      POUT_CH1 = (VOUT_CH1 * IOUT_CH1);
+      VOUT_CH2 = VOUT2;
+      IOUT_CH2 = IOUT2;
+      POUT_CH2 = (VOUT_CH2 * IOUT_CH2);
+      VOUT_CH3 = VOUT3;
+      IOUT_CH3 = IOUT3;  
+      POUT_CH3 = (VOUT_CH3 * IOUT_CH3);
+      Blink=!Blink;          
+    }
 }
 
 void METER()
@@ -632,106 +718,37 @@ void METER()
 
   //------------------CH1------------------------------------------------------
   TCA9548A(CH1);
-  VOUT_CH1 = (ADS_CH1.toVoltage(ADS_CH1.readADC(0)) * DIV_TENSAO) * CH1_METER_V;
-  if (VOUT_CH1 < 0)
-    VOUT_CH1 = 0;
-  IOUT_CH1 = (ADS_CH1.toVoltage(ADS_CH1.readADC(1)) - CH1_OFFSET) * CH1_METER_I;
-  if (IOUT_CH1 < 0)
-    IOUT_CH1 = 0;
-  POUT_CH1 = (VOUT_CH1 * IOUT_CH1);
+  VOUT1 = (ADS_CH1.toVoltage(ADS_CH1.readADC(0)) * DIV_TENSAO) * CH1_METER_V;
+  if (VOUT1 < 0)
+    VOUT1 = 0;
+  IOUT1 = (ADS_CH1.toVoltage(ADS_CH1.readADC(1)) - CH1_OFFSET) * CH1_METER_I;
+  if (IOUT1 < 0)
+    IOUT1 = 0;
+  //POUT_CH1 = (VOUT1 * IOUT1);
 
-  //--- OVP --- OCP ---
-  if (VOUT_CH1 > OVP_CH1)
-  {
-    DAC_Write(DAC_V_CH1, PWR_OFF, 0);
-    FLAG_OUT_CH1 = 0;
-    //SET_OUT();
-    FLAG_OVP_CH1 = 1;
-    BUZZER(1000);
-  }
-  if (IOUT_CH1 > OCP_CH1)
-  {
-    DAC_Write(DAC_V_CH1, PWR_OFF, 0);
-    FLAG_OUT_CH1 = 0;
-    //SET_OUT();
-    FLAG_OCP_CH1 = 1;
-    BUZZER(1000);
-  }  
 
   //------------------CH2------------------------------------------------------
   TCA9548A(CH2);
-  VOUT_CH2 = (ADS_CH2.toVoltage(ADS_CH2.readADC(0)) * DIV_TENSAO) * CH2_METER_V;
-  if (VOUT_CH2 < 0)
-    VOUT_CH2 = 0;
-  IOUT_CH2 = (ADS_CH2.toVoltage(ADS_CH2.readADC(1)) - CH2_OFFSET) * CH2_METER_I;
-  if (IOUT_CH2 < 0)
-    IOUT_CH2 = 0;
-  POUT_CH2 = (VOUT_CH2 * IOUT_CH2);
+  VOUT2 = (ADS_CH2.toVoltage(ADS_CH2.readADC(0)) * DIV_TENSAO) * CH2_METER_V;
+  if (VOUT2 < 0)
+    VOUT2 = 0;
+  IOUT2 = (ADS_CH2.toVoltage(ADS_CH2.readADC(1)) - CH2_OFFSET) * CH2_METER_I;
+  if (IOUT2 < 0)
+    IOUT2 = 0;
+  //POUT_CH2 = (VOUT2 * IOUT2);
 
-  //--- OVP --- OCP ---
-  if (VOUT_CH2 > OVP_CH2)
-  {
-    DAC_Write(DAC_V_CH2, PWR_OFF, 0);
-    FLAG_OUT_CH2 = 0;
-    //SET_OUT();
-    FLAG_OVP_CH2 = 1;
-    BUZZER(1000);
-  }
-  if (IOUT_CH2 > OCP_CH2)
-  {
-    DAC_Write(DAC_V_CH2, PWR_OFF, 0);
-    FLAG_OUT_CH2 = 0;
-    //SET_OUT();
-    FLAG_OCP_CH2 = 1;
-    BUZZER(1000);
-  }
 
   //------------------CH3------------------------------------------------------
   TCA9548A(CH3);
-  VOUT_CH3 = (ADS_CH3.toVoltage(ADS_CH3.readADC(0)) * DIV_TENSAO) * CH3_METER_V;
-  if (VOUT_CH3 < 0)
-    VOUT_CH3 = 0;
-  IOUT_CH3 = (ADS_CH3.toVoltage(ADS_CH3.readADC(1)) - CH3_OFFSET) * CH3_METER_I;
-  if (IOUT_CH3 < 0)
-    IOUT_CH3 = 0;
-  POUT_CH3 = (VOUT_CH3 * IOUT_CH3);
+  VOUT3 = (ADS_CH3.toVoltage(ADS_CH3.readADC(0)) * DIV_TENSAO) * CH3_METER_V;
+  if (VOUT3 < 0)
+    VOUT3 = 0;
+  IOUT3 = (ADS_CH3.toVoltage(ADS_CH3.readADC(1)) - CH3_OFFSET) * CH3_METER_I;
+  if (IOUT3 < 0)
+    IOUT3 = 0;
+  //POUT_CH3 = (VOUT3 * IOUT3);
 
-  //--- OVP --- OCP ---
-  if (VOUT_CH3 > OVP_CH3)
-  {
-    DAC_Write(DAC_V_CH3, PWR_OFF, 0);
-    FLAG_OUT_CH3 = 0;
-    //SET_OUT();
-    FLAG_OVP_CH3 = 1;
-    BUZZER(1000);
-  }
-  if (IOUT_CH3 > OCP_CH3)
-  {
-    DAC_Write(DAC_V_CH3, PWR_OFF, 0);
-    FLAG_OUT_CH3 = 0;
-    //SET_OUT();
-    FLAG_OCP_CH3 = 1;
-    BUZZER(1000);
-  }
-
-
-  //------------CHAVEADOR DOS RELES----------------------------------------------
-
-  if (FLAG_OUT_CH1)
-    RELES_CH1();
-  else
-  {
-    digitalWrite(RL1_CH1, LOW);
-    digitalWrite(RL2_CH1, LOW);
-  }
-  if (FLAG_OUT_CH2)
-    RELES_CH2();
-  else
-  {
-    digitalWrite(RL1_CH2, LOW);
-    digitalWrite(RL2_CH2, LOW);
-  }
-
+ 
 } // METER
 
 void SET_OUT()
@@ -860,6 +877,7 @@ void STORE_CONFIG()
   EEPROM.put(13, OTP);
   EEPROM.put(14, TEMP_MIN);
   EEPROM.put(15, FAN_PWM_MIN);  
+  EEPROM.put(16, RATE);
 
   // CH1
   EEPROM.put(1100, OVP_CH1);
@@ -897,6 +915,7 @@ void RESTORE_CONFIG()
   EEPROM.get(13, OTP);
   EEPROM.get(14, TEMP_MIN);
   EEPROM.get(15, FAN_PWM_MIN);
+  EEPROM.get(16, RATE);
 
   EEPROM.get(1100, OVP_CH1);
   EEPROM.get(1105, OCP_CH1);
@@ -1484,7 +1503,7 @@ void DISPLAY_PRINCIPAL()
 
   tft.setTextDatum(BR_DATUM);
 
-  if (VOUT_CH1 < 10.0)
+  if (VOUT_CH1 <= 9.99)
   {
     tft.setCursor(8, 52);
     tft.setTextFont(6);
@@ -1519,7 +1538,7 @@ void DISPLAY_PRINCIPAL()
   else
     tft.setTextColor(COLOR1, TFT_BLACK);
     tft.drawFloat(VSET_CH1, 2, 125, 250, 4);
-  if (VSET_CH1 < 10.00)
+  if (VSET_CH1 <= 9.99)
   {
     tft.setCursor(62, 224);
     tft.setTextFont(4);
@@ -1596,7 +1615,7 @@ void DISPLAY_PRINCIPAL()
   tft.setCursor(291, 160);
   tft.println("W");
 
-  if (VOUT_CH2 < 10.0)
+  if (VOUT_CH2 <= 9.99)
   {
     tft.setCursor(168, 52);
     tft.setTextFont(6);
@@ -1630,7 +1649,7 @@ void DISPLAY_PRINCIPAL()
     tft.setTextColor(TFT_BLACK, COLOR2);
   else
     tft.setTextColor(COLOR2, TFT_BLACK);
-  if (VSET_CH2 < 10.00)
+  if (VSET_CH2 <= 9.99)
   {
     tft.setCursor(222, 224);
     tft.setTextFont(4);
@@ -1788,11 +1807,22 @@ void DISPLAY_PRINCIPAL()
   else
     tft.print("          ");
 
-  tft.setCursor(400, 293);
+  tft.setCursor(380, 293);
   if (FLAG_LOCK)
     tft.print("Lock");
   else
     tft.print("            ");    
+
+ 
+  if (Blink)
+  {
+    tft.fillCircle(460, 303, 6, TFT_GREEN);
+  }
+  else
+  { 
+   tft.setCursor(450, 293);
+   tft.print("    "); 
+  }
 
 } // DISPLAY PRINCIPAL
 
@@ -1806,35 +1836,51 @@ void DISPLAY_MENU()
     tft.setCursor(300, 16);
     tft.print("Menu  Config");
     tft.setCursor(0, 30);  tft.print("1-Buzzer");  tft.setCursor(120, 30);  tft.print(":");
-    tft.setCursor(0, 60);  tft.print("2-OTP");     tft.setCursor(120, 60);  tft.print(":");
-    tft.setCursor(0, 90);  tft.print("3-Temp");    tft.setCursor(120, 90);  tft.print(":");
-    tft.setCursor(0, 120); tft.print("4-PWM");     tft.setCursor(120, 120); tft.print(":");
+    tft.setCursor(0, 60);  tft.print("2-Rate");    tft.setCursor(120, 60);  tft.print(":");
+    tft.setCursor(0, 90);  tft.print("3-OTP");     tft.setCursor(120, 90);  tft.print(":");
+    tft.setCursor(0, 120); tft.print("4-Temp");    tft.setCursor(120, 120);  tft.print(":");
+    tft.setCursor(0, 150); tft.print("5-PWM");     tft.setCursor(120, 150); tft.print(":");
 
-    tft.setCursor(185, MENU_ID * 30);
+
+    tft.setCursor(200, MENU_ID * 30);
     tft.print("<");
     if (MENU_ID > 1)
-      tft.setCursor(185, (MENU_ID * 30) - 30);
+      tft.setCursor(200, (MENU_ID * 30) - 30);
     tft.print("   ");
-    tft.setCursor(185, (MENU_ID * 30) + 30);
+    tft.setCursor(200, (MENU_ID * 30) + 30);
     tft.print("   ");
 
-    tft.setCursor(135, 30);
+    tft.setCursor(140, 30);
     if (FLAG_BUZZER)
-      tft.print("on   ");
+      tft.print("On   ");
     else
-      tft.print("off");
-    // tft.drawNumber(FLAG_BUZZER, 150, 56, 4);
-    tft.drawNumber(OTP, 170, 86, 4);
-    tft.drawNumber(TEMP_MIN, 170, 116, 4);
+      tft.print("Off");
+
+    tft.setCursor(140, 60);
+    if(RATE==0)
+    {
+      tft.print("High");
+    }
+    else if(RATE==300)
+    {
+      tft.print("Mid   ");
+    }
+    else if(RATE==600)
+    {
+      tft.print("Low ");
+    }
+
+    tft.drawNumber(OTP, 170, 116, 4);
+    tft.drawNumber(TEMP_MIN, 170, 146, 4);
     if(FAN_PWM_MIN < 100){
-      tft.setCursor(130, 120); 
+      tft.setCursor(130, 150); 
       tft.print("  ");
     } 
-    tft.drawNumber(FAN_PWM_MIN, 170, 146, 4);
+    tft.drawNumber(FAN_PWM_MIN, 170, 176, 4);
+
   }
   else if (FLAG_SELECT == 1)
   {
-
     tft.setTextColor(COLOR1, TFT_BLACK);
     tft.setTextFont(4);
     tft.setCursor(300, 16);
@@ -3119,10 +3165,12 @@ void KEYBOARD_MENU()
       if (MENU_ID == 1)
         FLAG_BUZZER = readEncoder(FLAG_BUZZER, 1, 0, 1);
       else if (MENU_ID == 2)
-        OTP = readEncoder(OTP, 5, 50, 90);
+        RATE = readEncoder(RATE, 300, 0, 600);           
       else if (MENU_ID == 3)
-        TEMP_MIN = readEncoder(TEMP_MIN, 5, 30, 60);
+        OTP = readEncoder(OTP, 5, 50, 90);
       else if (MENU_ID == 4)
+        TEMP_MIN = readEncoder(TEMP_MIN, 5, 30, 60);
+      else if (MENU_ID == 5)
         FAN_PWM_MIN = readEncoder(FAN_PWM_MIN, 5, 50, 250);
     }
   }
