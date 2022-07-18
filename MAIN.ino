@@ -642,7 +642,7 @@ void PROTECTIONS()
   {
     DAC_Write(DAC_V_CH1, PWR_OFF, 0);
     FLAG_OUT_CH1 = 0;
-    //SET_OUT();
+    SET_OUT();
     FLAG_OVP_CH1 = 1;
     BUZZER(1000);
   }
@@ -650,7 +650,7 @@ void PROTECTIONS()
   {
     DAC_Write(DAC_V_CH1, PWR_OFF, 0);
     FLAG_OUT_CH1 = 0;
-    //SET_OUT();
+    SET_OUT();
     FLAG_OCP_CH1 = 1;
     BUZZER(1000);
   } 
@@ -659,7 +659,7 @@ void PROTECTIONS()
   {
     DAC_Write(DAC_V_CH2, PWR_OFF, 0);
     FLAG_OUT_CH2 = 0;
-    //SET_OUT();
+    SET_OUT();
     FLAG_OVP_CH2 = 1;
     BUZZER(1000);
   }
@@ -667,7 +667,7 @@ void PROTECTIONS()
   {
     DAC_Write(DAC_V_CH2, PWR_OFF, 0);
     FLAG_OUT_CH2 = 0;
-    //SET_OUT();
+    SET_OUT();
     FLAG_OCP_CH2 = 1;
     BUZZER(1000);
   }
@@ -676,7 +676,7 @@ void PROTECTIONS()
   {
     DAC_Write(DAC_V_CH3, PWR_OFF, 0);
     FLAG_OUT_CH3 = 0;
-    //SET_OUT();
+    SET_OUT();
     FLAG_OVP_CH3 = 1;
     BUZZER(1000);
   }
@@ -684,7 +684,7 @@ void PROTECTIONS()
   {
     DAC_Write(DAC_V_CH3, PWR_OFF, 0);
     FLAG_OUT_CH3 = 0;
-    //SET_OUT();
+    SET_OUT();
     FLAG_OCP_CH3 = 1;
     BUZZER(1000);
   }  
@@ -1449,15 +1449,22 @@ void DISPLAY_PRINCIPAL()
 
   tft.setCursor(12, 7);
   tft.setTextFont(4);
-
   tft.fillRoundRect(9, 4, 20, 28, 4, COLOR1);
   //  tft.fillRect(9, 4, 20, 28, COLOR1);
   tft.setTextColor(TFT_BLACK);
   tft.println("1");
 
+
   tft.setCursor(53, 7);
   if (FLAG_OUT_CH1)
   {
+  if(Blink)
+  {
+    tft.fillCircle(42, 8, 3, COLOR1);
+  }
+  else{
+    tft.fillCircle(42, 8, 3, TFT_BLACK);
+  }
     tft.setTextColor(COLOR1, TFT_BLACK);
     tft.println("ON   ");
     tft.setCursor(110, 7);
@@ -1480,6 +1487,7 @@ void DISPLAY_PRINCIPAL()
   }
   else
   {
+    tft.fillCircle(42, 8, 3, TFT_BLACK);
     tft.setTextColor(COLOR1, TFT_BLACK);
     tft.println("OFF          ");
     tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
@@ -1581,6 +1589,13 @@ void DISPLAY_PRINCIPAL()
   tft.setCursor(213, 7);
   if (FLAG_OUT_CH2)
   {
+  if(Blink)
+  {
+    tft.fillCircle(202, 8, 3, COLOR2);
+  }
+  else{
+    tft.fillCircle(202, 8, 3, TFT_BLACK);
+  }    
     tft.setTextColor(COLOR2, TFT_BLACK);
     tft.println("ON   ");
     tft.setCursor(270, 7);
@@ -1603,6 +1618,7 @@ void DISPLAY_PRINCIPAL()
   }
   else
   {
+    tft.fillCircle(202, 8, 3, TFT_BLACK);
     tft.setTextColor(COLOR2, TFT_BLACK);
     tft.println("OFF          ");
     tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
@@ -1694,6 +1710,13 @@ void DISPLAY_PRINCIPAL()
   tft.setCursor(375, 7);
   if (FLAG_OUT_CH3)
   {
+  if(Blink)
+  {
+    tft.fillCircle(362, 8, 3, COLOR3);
+  }
+  else{
+    tft.fillCircle(362, 8, 3, TFT_BLACK);
+  }    
     tft.setTextColor(COLOR3, TFT_BLACK);
     tft.println("ON   ");
     tft.setCursor(432, 7);
@@ -1716,6 +1739,7 @@ void DISPLAY_PRINCIPAL()
   }
   else
   {
+    tft.fillCircle(362, 8, 3, TFT_BLACK);
     tft.setTextColor(COLOR3, TFT_BLACK);
     tft.println("OFF          ");
     tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
@@ -1814,16 +1838,6 @@ void DISPLAY_PRINCIPAL()
     tft.print("            ");    
 
  
-  if (Blink)
-  {
-    tft.fillCircle(460, 303, 6, TFT_GREEN);
-  }
-  else
-  { 
-   tft.setCursor(450, 293);
-   tft.print("    "); 
-  }
-
 } // DISPLAY PRINCIPAL
 
 void DISPLAY_MENU()
